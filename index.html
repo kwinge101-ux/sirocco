@@ -12,9 +12,26 @@
         padding: 15px;
         background: #f7f7f7;
     }
-    h2 {
-        margin-top: 30px;
+    h1 { margin-bottom: 8px; }
+    .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
     }
+    .btn {
+        appearance: none;
+        border: none;
+        background: #1976d2;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    .btn.secondary { background: #777; }
+    .muted { color:#666; font-size: 12px; }
+    h2 { margin-top: 20px; }
     .match {
         background: white;
         padding: 12px;
@@ -26,45 +43,64 @@
         display: flex;
         justify-content: space-between;
         gap: 10px;
+        align-items: center;
     }
-    input {
-        width: 50px;
-        padding: 5px;
-        font-size: 1.2em;
+    .inputs {
+        display:flex;
+        gap:10px;
+        align-items:center;
+    }
+    input[type="number"] {
+        width: 70px;
+        padding: 6px;
+        font-size: 1.1em;
         text-align: center;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fafafa;
+    }
+    .pair {
+        font-size: 14px;
+        color:#333;
     }
     table {
         width: 100%;
         border-collapse: collapse;
         margin-top: 15px;
         background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     th, td {
         padding: 8px;
-        border-bottom: 1px solid #ddd;
+        border-bottom: 1px solid #eee;
         text-align: center;
     }
     th {
         background: #eee;
+        font-weight: 600;
     }
+    .right { text-align:right; }
 </style>
-
 </head>
 
 <body>
 
-<h1>Padel – Resultat & Tabell</h1>
-<p>Klicka in resultat efter varje match. Tabell uppdateras automatiskt.</p>
-
+<div class="topbar">
+  <h1>Padel – Resultat & Tabell</h1>
+  <button id="resetBtn" class="btn secondary" title="Rensa alla sparade resultat">Rensa</button>
+</div>
+<p class="muted">Sidan sparar automatiskt dina resultat i din webbläsare.</p>
 
 <h2>Matcher</h2>
 <div id="matches"></div>
-
 
 <h2>Tabell</h2>
 <table id="table">
     <thead>
         <tr>
+            <th class="right">#</th>
             <th>Spelare</th>
             <th>Poäng</th>
             <th>+Gem</th>
@@ -76,6 +112,12 @@
 </table>
 
 <script>
+// ------------------------------
+// KONFIG
+// ------------------------------
+const STORAGE_KEY = "padel_v1_results"; // ändra version om du ändrar schema
+const SCHEMA_VERSION = "v1";
+
 // ------------------------------
 // SPELARE
 // ------------------------------
@@ -91,7 +133,7 @@ const players = [
 ];
 
 // ------------------------------
-// MATCHSCHEMA FRÅN DIG
+// MATCHSCHEMA
 // ------------------------------
 const matches = [
   {round:1, court:1, teamA:["Kristofer Winge","Robert Norberg"], teamB:["Sasha Koterac","Henrik Nyiri"]},
@@ -117,92 +159,174 @@ const matches = [
 ];
 
 // ------------------------------
-// GENERERA MATCHLISTA
+// STATE & LAGRING
+// ------------------------------
+function defaultResults() {
+  // en array med {a: null, b: null} för varje match
+  return matches.map(() => ({ a: null, b: null }));
+}
+
+function loadResults() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { version: SCHEMA_VERSION, results: defaultResults() };
+    const data = JSON.parse(raw);
+    if (data.version !== SCHEMA_VERSION || !Array.isArray(data.results) || data.results.length !== matches.length) {
+      // schema ändrats – börja om
+      return { version: SCHEMA_VERSION, results: defaultResults() };
+    }
+    // säkerställ typ
+    return {
+      version: data.version,
+      results: data.results.map(x => ({
+        a: (x && typeof x.a === "number") ? x.a : (x && x.a === null ? null : null),
+        b: (x && typeof x.b === "number") ? x.b : (x && x.b === null ? null : null)
+      }))
+    };
+  } catch {
+    return { version: SCHEMA_VERSION, results: defaultResults() };
+  }
+}
+
+function saveResults(results) {
+  const payload = JSON.stringify({ version: SCHEMA_VERSION, results });
+  localStorage.setItem(STORAGE_KEY, payload);
+}
+
+// Hålla state i minnet
+let state = loadResults();
+
+// ------------------------------
+// GENERERA MATCHLISTA MED AUTOSAVE
 // ------------------------------
 const matchDiv = document.getElementById("matches");
 
 matches.forEach((m,i) => {
-    const div = document.createElement("div");
-    div.className = "match";
+  const div = document.createElement("div");
+  div.className = "match";
 
-    div.innerHTML = `
+  div.innerHTML = `
+    <div class="flex">
+      <div>
         <strong>Omgång ${m.round}, Bana ${m.court}</strong><br>
-        ${m.teamA.join(" & ")} <strong>vs</strong> ${m.teamB.join(" & ")}
-        <br><br>
-        <div class="flex">
-            <input type="number" min="0" id="a${i}" placeholder="A">
-            <input type="number" min="0" id="b${i}" placeholder="B">
-        </div>
-    `;
+        <span class="pair">${m.teamA.join(" & ")} <strong>vs</strong> ${m.teamB.join(" & ")}</span>
+      </div>
+      <div class="inputs">
+        <input type="number" min="0" id="a${i}" placeholder="A">
+        <span>-</span>
+        <input type="number" min="0" id="b${i}" placeholder="B">
+      </div>
+    </div>
+  `;
 
-    matchDiv.appendChild(div);
+  matchDiv.appendChild(div);
 
-    document.getElementById("a"+i).addEventListener("input", updateTable);
-    document.getElementById("b"+i).addEventListener("input", updateTable);
+  const aEl = document.getElementById("a"+i);
+  const bEl = document.getElementById("b"+i);
+
+  // Återställ sparade värden
+  const v = state.results[i];
+  if (v && v.a !== null) aEl.value = v.a;
+  if (v && v.b !== null) bEl.value = v.b;
+
+  const onChange = () => {
+    const aVal = aEl.value === "" ? null : Math.max(0, parseInt(aEl.value));
+    const bVal = bEl.value === "" ? null : Math.max(0, parseInt(bEl.value));
+    state.results[i] = { a: aVal, b: bVal };
+    saveResults(state.results);
+    updateTable();
+  };
+
+  aEl.addEventListener("input", onChange);
+  bEl.addEventListener("input", onChange);
 });
 
 // ------------------------------
 // TABELLDATA
 // ------------------------------
 function emptyStats() {
-    const stats = {};
-    players.forEach(p => stats[p] = {pts:0, plus:0, minus:0});
-    return stats;
+  const stats = {};
+  players.forEach(p => stats[p] = { pts:0, plus:0, minus:0 });
+  return stats;
 }
 
 // ------------------------------
 // UPPDATERA TABELLEN
 // ------------------------------
 function updateTable() {
-    const stats = emptyStats();
+  const stats = emptyStats();
 
-    matches.forEach((m, i) => {
-        const a = parseInt(document.getElementById("a"+i).value);
-        const b = parseInt(document.getElementById("b"+i).value);
+  matches.forEach((m, i) => {
+    const rec = state.results[i] || {a:null, b:null};
+    const a = rec.a;
+    const b = rec.b;
 
-        if (isNaN(a) || isNaN(b)) return;
+    if (a === null || b === null) return;
 
-        // lägg till gem
-        m.teamA.forEach(p => { stats[p].plus += a; stats[p].minus += b; });
-        m.teamB.forEach(p => { stats[p].plus += b; stats[p].minus += a; });
+    // Lägg till gem
+    m.teamA.forEach(p => { stats[p].plus += a; stats[p].minus += b; });
+    m.teamB.forEach(p => { stats[p].plus += b; stats[p].minus += a; });
 
-        // poängsystem
-        if (a > b) {
-            m.teamA.forEach(p => stats[p].pts += 2);
-        } else if (b > a) {
-            m.teamB.forEach(p => stats[p].pts += 2);
-        } else {
-            m.teamA.forEach(p => stats[p].pts += 1);
-            m.teamB.forEach(p => stats[p].pts += 1);
-        }
-    });
+    // Poängsystem
+    if (a > b) {
+      m.teamA.forEach(p => stats[p].pts += 2);
+    } else if (b > a) {
+      m.teamB.forEach(p => stats[p].pts += 2);
+    } else {
+      m.teamA.forEach(p => stats[p].pts += 1);
+      m.teamB.forEach(p => stats[p].pts += 1);
+    }
+  });
 
-    // Sortera tabellen
-    const sorted = Object.entries(stats).sort((a,b) => {
-        if (b[1].pts !== a[1].pts) return b[1].pts - a[1].pts;
-        const diffA = a[1].plus - a[1].minus;
-        const diffB = b[1].plus - b[1].minus;
-        return diffB - diffA;
-    });
+  // Sortera: poäng desc, diff desc, +gem desc, namn asc
+  const sorted = Object.entries(stats).sort((a,b) => {
+    if (b[1].pts !== a[1].pts) return b[1].pts - a[1].pts;
+    const diffA = a[1].plus - a[1].minus;
+    const diffB = b[1].plus - b[1].minus;
+    if (diffB !== diffA) return diffB - diffA;
+    if (b[1].plus !== a[1].plus) return b[1].plus - a[1].plus;
+    return a[0].localeCompare(b[0], "sv");
+  });
 
-    // Skriv ut
-    const tbody = document.querySelector("#table tbody");
-    tbody.innerHTML = "";
+  const tbody = document.querySelector("#table tbody");
+  tbody.innerHTML = "";
 
-    sorted.forEach(([player, s]) => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-            <td>${player}</td>
-            <td>${s.pts}</td>
-            <td>${s.plus}</td>
-            <td>${s.minus}</td>
-            <td>${s.plus - s.minus}</td>
-        `;
-        tbody.appendChild(row);
-    });
-
+  sorted.forEach(([player, s], idx) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td class="right">${idx+1}</td>
+      <td style="text-align:left">${player}</td>
+      <td>${s.pts}</td>
+      <td>${s.plus}</td>
+      <td>${s.minus}</td>
+      <td>${s.plus - s.minus}</td>
+    `;
+    tbody.appendChild(row);
+  });
 }
 
+// ------------------------------
+// RESET
+// ------------------------------
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (!confirm("Rensa alla resultat? Detta går inte att ångra.")) return;
+  state.results = defaultResults();
+  saveResults(state.results);
+
+  // töm inputs
+  matches.forEach((_, i) => {
+    const aEl = document.getElementById("a"+i);
+    const bEl = document.getElementById("b"+i);
+    if (aEl) aEl.value = "";
+    if (bEl) bEl.value = "";
+  });
+
+  updateTable();
+});
+
+// Init
+updateTable();
 </script>
 </body>
 </html>
+``
