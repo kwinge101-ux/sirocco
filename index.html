@@ -1,1 +1,208 @@
-<!doctype html><html><body><h1>Full v3.2 HTML will go here</h1></body></html>
+
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Padelresultat – 8 spelare</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        padding: 15px;
+        background: #f7f7f7;
+    }
+    h2 {
+        margin-top: 30px;
+    }
+    .match {
+        background: white;
+        padding: 12px;
+        margin-bottom: 12px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .flex {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    input {
+        width: 50px;
+        padding: 5px;
+        font-size: 1.2em;
+        text-align: center;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        background: white;
+    }
+    th, td {
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+    }
+    th {
+        background: #eee;
+    }
+</style>
+
+</head>
+
+<body>
+
+<h1>Padel – Resultat & Tabell</h1>
+<p>Klicka in resultat efter varje match. Tabell uppdateras automatiskt.</p>
+
+
+<h2>Matcher</h2>
+<div id="matches"></div>
+
+
+<h2>Tabell</h2>
+<table id="table">
+    <thead>
+        <tr>
+            <th>Spelare</th>
+            <th>Poäng</th>
+            <th>+Gem</th>
+            <th>-Gem</th>
+            <th>Diff</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+// ------------------------------
+// SPELARE
+// ------------------------------
+const players = [
+  "Kristofer Winge",
+  "Robert Norberg",
+  "Sasha Koterac",
+  "Henrik Nyiri",
+  "Emil Svensson",
+  "Håkan Norberg",
+  "Magnus Bengtsson",
+  "Henrik Winskogh"
+];
+
+// ------------------------------
+// MATCHSCHEMA FRÅN DIG
+// ------------------------------
+const matches = [
+  {round:1, court:1, teamA:["Kristofer Winge","Robert Norberg"], teamB:["Sasha Koterac","Henrik Nyiri"]},
+  {round:1, court:2, teamA:["Emil Svensson","Håkan Norberg"],    teamB:["Magnus Bengtsson","Henrik Winskogh"]},
+
+  {round:2, court:1, teamA:["Kristofer Winge","Sasha Koterac"],  teamB:["Emil Svensson","Magnus Bengtsson"]},
+  {round:2, court:2, teamA:["Robert Norberg","Henrik Nyiri"],    teamB:["Håkan Norberg","Henrik Winskogh"]},
+
+  {round:3, court:1, teamA:["Kristofer Winge","Henrik Nyiri"],   teamB:["Håkan Norberg","Magnus Bengtsson"]},
+  {round:3, court:2, teamA:["Robert Norberg","Sasha Koterac"],   teamB:["Emil Svensson","Henrik Winskogh"]},
+
+  {round:4, court:1, teamA:["Kristofer Winge","Emil Svensson"],  teamB:["Henrik Nyiri","Henrik Winskogh"]},
+  {round:4, court:2, teamA:["Robert Norberg","Håkan Norberg"],   teamB:["Sasha Koterac","Magnus Bengtsson"]},
+
+  {round:5, court:1, teamA:["Kristofer Winge","Håkan Norberg"],  teamB:["Sasha Koterac","Henrik Winskogh"]},
+  {round:5, court:2, teamA:["Robert Norberg","Emil Svensson"],   teamB:["Henrik Nyiri","Magnus Bengtsson"]},
+
+  {round:6, court:1, teamA:["Kristofer Winge","Magnus Bengtsson"], teamB:["Robert Norberg","Henrik Winskogh"]},
+  {round:6, court:2, teamA:["Sasha Koterac","Håkan Norberg"],      teamB:["Henrik Nyiri","Emil Svensson"]},
+
+  {round:7, court:1, teamA:["Kristofer Winge","Henrik Winskogh"],  teamB:["Robert Norberg","Magnus Bengtsson"]},
+  {round:7, court:2, teamA:["Sasha Koterac","Emil Svensson"],      teamB:["Henrik Nyiri","Håkan Norberg"]}
+];
+
+// ------------------------------
+// GENERERA MATCHLISTA
+// ------------------------------
+const matchDiv = document.getElementById("matches");
+
+matches.forEach((m,i) => {
+    const div = document.createElement("div");
+    div.className = "match";
+
+    div.innerHTML = `
+        <strong>Omgång ${m.round}, Bana ${m.court}</strong><br>
+        ${m.teamA.join(" & ")} <strong>vs</strong> ${m.teamB.join(" & ")}
+        <br><br>
+        <div class="flex">
+            <input type="number" min="0" id="a${i}" placeholder="A">
+            <input type="number" min="0" id="b${i}" placeholder="B">
+        </div>
+    `;
+
+    matchDiv.appendChild(div);
+
+    document.getElementById("a"+i).addEventListener("input", updateTable);
+    document.getElementById("b"+i).addEventListener("input", updateTable);
+});
+
+// ------------------------------
+// TABELLDATA
+// ------------------------------
+function emptyStats() {
+    const stats = {};
+    players.forEach(p => stats[p] = {pts:0, plus:0, minus:0});
+    return stats;
+}
+
+// ------------------------------
+// UPPDATERA TABELLEN
+// ------------------------------
+function updateTable() {
+    const stats = emptyStats();
+
+    matches.forEach((m, i) => {
+        const a = parseInt(document.getElementById("a"+i).value);
+        const b = parseInt(document.getElementById("b"+i).value);
+
+        if (isNaN(a) || isNaN(b)) return;
+
+        // lägg till gem
+        m.teamA.forEach(p => { stats[p].plus += a; stats[p].minus += b; });
+        m.teamB.forEach(p => { stats[p].plus += b; stats[p].minus += a; });
+
+        // poängsystem
+        if (a > b) {
+            m.teamA.forEach(p => stats[p].pts += 2);
+        } else if (b > a) {
+            m.teamB.forEach(p => stats[p].pts += 2);
+        } else {
+            m.teamA.forEach(p => stats[p].pts += 1);
+            m.teamB.forEach(p => stats[p].pts += 1);
+        }
+    });
+
+    // Sortera tabellen
+    const sorted = Object.entries(stats).sort((a,b) => {
+        if (b[1].pts !== a[1].pts) return b[1].pts - a[1].pts;
+        const diffA = a[1].plus - a[1].minus;
+        const diffB = b[1].plus - b[1].minus;
+        return diffB - diffA;
+    });
+
+    // Skriv ut
+    const tbody = document.querySelector("#table tbody");
+    tbody.innerHTML = "";
+
+    sorted.forEach(([player, s]) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${player}</td>
+            <td>${s.pts}</td>
+            <td>${s.plus}</td>
+            <td>${s.minus}</td>
+            <td>${s.plus - s.minus}</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+}
+
+</script>
+</body>
+</html>
